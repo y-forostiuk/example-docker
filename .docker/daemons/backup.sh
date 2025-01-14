@@ -17,12 +17,6 @@ DB_PORT=${MYSQL_PORT:-3306}
 BACKUP_DIR="/var/www/html/.docker/backup"
 DATE=$(date +%Y-%m-%d)
 
-echo $DB_NAME
-echo $DB_USER
-echo $DB_PASSWORD
-echo $DB_HOST
-echo $DB_PORT
-
 mkdir -p $BACKUP_DIR
 
 # Визначення директорії для зберігання бекапу
