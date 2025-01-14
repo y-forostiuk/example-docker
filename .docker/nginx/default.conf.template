@@ -1,0 +1,109 @@
+upstream php_upstream {
+    server ${PHP_HOST}:${PHP_PORT};
+}
+
+upstream node_upstream {
+    server ${NODE_HOST}:${NODE_PORT};
+}
+
+upstream phpmyadmin_upstream {
+    server ${PHPMYADMIN_HOST}:${PHPMYADMIN_PORT};
+}
+
+server {
+    client_max_body_size 0;
+    listen ${SERVER_PORT} ssl;
+    fastcgi_send_timeout 900;
+    fastcgi_read_timeout 900;
+
+    server_name ${HOST_NAME};
+    root /var/www/html/public/;
+
+    #ssl_certificate /etc/nginx/certs/nginx.crt;
+    #ssl_certificate_key /etc/nginx/certs/nginx.key;
+
+    ssl_certificate /etc/nginx/certs/nginx-selfsigned.crt;
+    ssl_certificate_key /etc/nginx/certs/nginx-selfsigned.key;
+
+    # Додаткові параметри SSL
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_dhparam /etc/nginx/dhparam.pem;
+
+    ssl_ciphers EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH;
+    ssl_ecdh_curve secp384r1;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+
+    index index.php;
+
+    charset utf-8;
+
+    # Проксування запитів до контейнера phpMyAdmin
+    location ~ ^/phpmyadmin {
+        rewrite ^/phpmyadmin(/.*)$ $1 break; # Видаляє /phpmyadmin з шляху
+        proxy_pass http://phpmyadmin_upstream;
+
+        # Для коректної обробки статичних файлів
+        sub_filter '/themes/' '/phpmyadmin/themes/';
+        sub_filter '/js/' '/phpmyadmin/js/';
+        sub_filter '/css/' '/phpmyadmin/css/';
+        sub_filter_once off;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+
+        # Передача заголовків клієнта
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Налаштування для кращої сумісності
+        proxy_redirect off;
+        proxy_buffering off;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location = /favicon.ico {
+        access_log off;
+        log_not_found off;
+    }
+    location = /robots.txt  {
+        access_log off;
+        log_not_found off;
+    }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        fastcgi_pass php_upstream;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+
+    location ~ ^/(vite|node_modules)/{
+        proxy_pass http://node_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Лог-файли (опційно для діагностики)
+    error_log /var/log/nginx/project_error.log;
+    access_log /var/log/nginx/project_access.log;
+}

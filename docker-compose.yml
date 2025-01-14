@@ -1,0 +1,190 @@
+services:
+    db:
+        build:
+            context: ./.docker/mysql
+        container_name: db
+        restart: always
+        volumes:
+            - project-mysql-data:/var/lib/mysql
+        environment:
+            MYSQL_DATABASE: ${DOCKER_MYSQL_DATABASE}
+            MYSQL_USER: ${DOCKER_MYSQL_USER}
+            MYSQL_PASSWORD: '${DOCKER_MYSQL_PASSWORD}'
+            MYSQL_ROOT_HOST: ${DOCKER_MYSQL_ROOT_HOST}
+            MYSQL_ROOT_PASSWORD: '${DOCKER_MYSQL_ROOT_PASSWORD}'
+        ports:
+            - ${DOCKER_MYSQL_PORT_OUT}:${DOCKER_MYSQL_PORT}
+        networks:
+            - project
+
+    redis:
+        image: redis:7.4.2-alpine
+        container_name: redis
+        restart: always
+        tty: true
+        ports:
+            - ${DOCKER_REDIS_PORT_OUT}:${DOCKER_REDIS_PORT}
+        volumes:
+            - project-redis-data:/data
+        networks:
+            - project
+        command: redis-server --port ${DOCKER_REDIS_PORT}
+
+    phpmyadmin:
+        image: phpmyadmin:5.2.1
+        container_name: phpmyadmin
+        restart: always
+        environment:
+            PMA_ABSOLUTE_URI: 'http://localhost:${DOCKER_SERVER_PORT_OUT}/phpmyadmin/'
+            PMA_HOST: '${DOCKER_MYSQL_HOST}'
+            PMA_PORT: '${DOCKER_MYSQL_PORT}'
+            UPLOAD_LIMIT: 512M
+            APACHE_PORT: '${DOCKER_PHPMYADMIN_PORT}'
+        depends_on:
+            - db
+        networks:
+            - project
+
+    php:
+        tty: true
+        build:
+            context: ./.docker/php
+            args:
+                USER_ID: ${DOCKER_SYS_UID}
+                GROUP_ID: ${DOCKER_SYS_GID}
+                USER_NAME: ${DOCKER_SYS_UNAME}
+                GROUP_NAME: ${DOCKER_SYS_GNAME}
+                PHP_HOST: ${DOCKER_PHP_HOST}
+                PHP_PORT: ${DOCKER_PHP_PORT}
+                REDIS_HOST: ${DOCKER_REDIS_HOST}
+                REDIS_PORT: ${DOCKER_REDIS_PORT}
+                MYSQL_HOST: ${DOCKER_MYSQL_HOST}
+                MYSQL_PORT: ${DOCKER_MYSQL_PORT}
+        container_name: php
+        volumes:
+            - ./:/var/www/html/
+        depends_on:
+            - redis
+            - db
+        links:
+            - redis
+            - db
+        networks:
+            - project
+
+    server:
+        build:
+            context: ./.docker/nginx
+            args:
+                USER_ID: ${DOCKER_SYS_UID}
+                GROUP_ID: ${DOCKER_SYS_GID}
+                USER_NAME: ${DOCKER_SYS_UNAME}
+                GROUP_NAME: ${DOCKER_SYS_GNAME}
+                PHP_PORT: ${DOCKER_PHP_PORT}
+                PHP_HOST: ${DOCKER_PHP_HOST}
+                NODE_HOST: ${DOCKER_NODE_HOST}
+                NODE_PORT: ${DOCKER_NODE_PORT}
+                PHPMYADMIN_HOST: ${DOCKER_PHPMYADMIN_HOST}
+                PHPMYADMIN_PORT: ${DOCKER_PHPMYADMIN_PORT}
+                SERVER_PORT: ${DOCKER_SERVER_PORT}
+                HOST_NAME: ${DOCKER_HOST_NAME}
+        container_name: server
+        ports:
+            - ${DOCKER_SERVER_PORT_OUT}:${DOCKER_SERVER_PORT}
+        volumes:
+            - ./:/var/www/html/
+        links:
+            - php
+        depends_on:
+            - php
+        networks:
+            - project
+
+    mail:
+        container_name: mail
+        image: axllent/mailpit:v1.21.8
+        ports:
+            - ${DOCKER_MAIL_UI_PORT}:${DOCKER_MAIL_UI_PORT}
+            - ${DOCKER_MAIL_SMTP_PORT}:${DOCKER_MAIL_SMTP_PORT}
+        networks:
+            - project
+
+    supervisor:
+        restart: always
+        build:
+            context: ./.docker/daemons
+            args:
+                USER_ID: ${DOCKER_SYS_UID}
+                USER_NAME: ${DOCKER_SYS_UNAME}
+                USER_PASSWORD: ${DOCKER_SYS_PASSWORD}
+                GROUP_ID: ${DOCKER_SYS_GID}
+                GROUP_NAME: ${DOCKER_SYS_GNAME}
+                PHP_HOST: ${DOCKER_PHP_HOST}
+                PHP_PORT: ${DOCKER_PHP_PORT}
+                CONTAINER_PORT: ${DOCKER_SUPERVISOR_PORT}
+                REDIS_HOST: ${DOCKER_REDIS_HOST}
+                REDIS_PORT: ${DOCKER_REDIS_PORT}
+                MYSQL_HOST: ${DOCKER_MYSQL_HOST}
+                MYSQL_PORT: ${DOCKER_MYSQL_PORT}
+        container_name: supervisor
+        environment:
+            CONTAINER_ROLE: supervisor
+            MYSQL_DATABASE: ${DOCKER_MYSQL_DATABASE}
+            MYSQL_USER: ${DOCKER_MYSQL_USER}
+            MYSQL_PASSWORD: '${DOCKER_MYSQL_PASSWORD}'
+            MYSQL_HOST: ${DOCKER_MYSQL_HOST}
+            MYSQL_PORT: ${DOCKER_MYSQL_PORT}
+        volumes:
+            - ./:/var/www/html
+        networks:
+            - project
+        links:
+            - db
+            - redis
+        depends_on:
+            - db
+            - php
+            - redis
+            - server
+
+    schedule:
+        restart: always
+        build:
+            context: ./.docker/daemons
+            args:
+                USER_ID: ${DOCKER_SYS_UID}
+                GROUP_ID: ${DOCKER_SYS_GID}
+                USER_NAME: ${DOCKER_SYS_UNAME}
+                GROUP_NAME: ${DOCKER_SYS_GNAME}
+                PHP_HOST: ${DOCKER_PHP_HOST}
+                PHP_PORT: ${DOCKER_PHP_PORT}
+                CONTAINER_PORT: ${DOCKER_SCHEDULE_PORT}
+                REDIS_HOST: ${DOCKER_REDIS_HOST}
+                REDIS_PORT: ${DOCKER_REDIS_PORT}
+                MYSQL_HOST: ${DOCKER_MYSQL_HOST}
+                MYSQL_PORT: ${DOCKER_MYSQL_PORT}
+        environment:
+            CONTAINER_ROLE: scheduler
+        container_name: schedule
+        volumes:
+            - ./:/var/www/html
+        networks:
+            - project
+        links:
+            - db
+            - redis
+        depends_on:
+            - db
+            - php
+            - redis
+            - server
+
+networks:
+    project:
+        driver: bridge
+
+volumes:
+    project-redis-data:
+        driver: local
+    project-mysql-data:
+        driver: local

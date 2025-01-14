@@ -1,0 +1,42 @@
+[mysqld]
+# Прослуховування на всіх IP-адресах (для доступу ззовні)
+bind-address=0.0.0.0
+
+# Використання UTF-8MB4 для кодування символів
+character-set-server = utf8mb4
+collation-server = utf8mb4_bin
+
+authentication_policy=caching_sha2_password
+#authentication_policy=mysql_native_password
+
+# Налаштування для файлу журналу помилок
+log-error = /var/log/mysql/mysql-error.log
+
+# Налаштування для ведення журналу повільних запитів
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/mysql-slow.log
+long_query_time = 5.0
+log_queries_not_using_indexes = 0
+
+# Налаштування для загального журналу запитів
+general_log = 1
+general_log_file = /var/log/mysql/mysql-query.log
+
+# Ліміт на максимальний об'єм пакету
+max_allowed_packet=512M
+
+# Ліміт на розмір бінарного журналу
+max_binlog_size = 50M
+
+# Обмеження на зберігання файлів binlog (наприклад, 1 день = 86400 секунд)
+binlog_expire_logs_seconds = 86400
+
+# Інші налаштування
+log_bin = /var/log/mysql/mysql-bin.log
+binlog_row_image = full
+
+[mysql]
+default-character-set = utf8mb4
+
+[client]
+default-character-set = utf8mb4

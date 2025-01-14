@@ -1,0 +1,52 @@
+[unix_http_server]
+file=/run/supervisord.sock
+chmod=0700
+chown=${USER_NAME}:${GROUP_NAME}
+username=${USER_NAME}
+password=${USER_PASSWORD}
+
+[supervisord]
+childlogdir=/var/www/html/storage/logs/
+logfile=/var/www/html/storage/logs/supervisord.log
+pidfile=/var/www/html/storage/logs/supervisord.pid
+logfile_maxbytes=10MB
+logfile_backups=10
+nodaemon=true
+user=root
+
+[supervisorctl]
+serverurl=unix:///run/supervisord.sock
+username=${USER_NAME}
+password=${USER_PASSWORD}
+
+[rpcinterface:supervisor]
+supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+[program:queue_redis]
+process_name=%(program_name)s_%(process_num)02d
+command=php -d memory_limit=256M /var/www/html/artisan queue:work redis --queue="default" --tries=5 --timeout=6000 --max-time=6000
+autostart=true
+autorestart=true
+user=${USER_NAME}
+numprocs=4
+redirect_stderr=true
+stdout_logfile=/var/www/html/storage/logs/worker.log
+stdout_logfile_maxbytes=10MB
+stopwaitsecs=3600
+
+[program:horizon]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/html/artisan horizon
+autostart=true
+autorestart=true
+user=${USER_NAME}
+redirect_stderr=true
+stdout_logfile=/var/www/html/storage/logs/horizon.log
+
+[program:crond]
+command=/usr/sbin/crond -f -l 8
+autostart=true
+autorestart=true
+environment=HOME="/home/${USER_NAME}",USER="${USER_NAME}"
+stderr_logfile=/var/www/html/storage/logs/cron.log
+stdout_logfile=/var/www/html/storage/logs/cron.log

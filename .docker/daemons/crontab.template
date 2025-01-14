@@ -1,0 +1,8 @@
+# Запуск дампу бази даних кожен день о 2:00
+0 23 * * * /var/www/html/.docker/daemons/backup.sh daily >> /var/www/html/storage/logs/cron.log 2>&1
+
+# Запуск дампу бази даних кожен понеділок о 3:00
+0 0 * * 1 /var/www/html/.docker/daemons/backup.sh weekly >> /var/www/html/storage/logs/cron.log 2>&1
+
+# Запуск дампу бази даних першого числа кожного місяця о 4:00
+0 1 1 * * /var/www/html/.docker/daemons/backup.sh monthly >> /var/www/html/storage/logs/cron.log 2>&1
